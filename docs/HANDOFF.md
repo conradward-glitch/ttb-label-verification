@@ -26,7 +26,6 @@ backend/app/matching.py   Field matching and status aggregation
 backend/app/warning.py    Government warning validation
 backend/tests/            pytest coverage
 samples/                  Sample labels and application data
-scripts/generate_sample_labels.py
 Dockerfile
 render.yaml
 ```

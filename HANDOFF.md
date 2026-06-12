@@ -8,7 +8,7 @@ Single-label MVP implemented and locally verified as far as the current WSL envi
 
 Verified:
 
-- Backend tests: 11 passed
+- Backend tests: 15 passed
 - Frontend production build: passed
 - FastAPI health endpoint: passed
 - FastAPI served built React frontend from `frontend/dist`: passed

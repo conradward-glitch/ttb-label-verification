@@ -33,7 +33,6 @@ APPROACH.md
 CHANGELOG.md
 HANDOFF.md
 LICENSE
-READY_FOR_GITHUB.md
 ```
 
 ## Option A — Deploy with render.yaml

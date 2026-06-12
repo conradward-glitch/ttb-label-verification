@@ -1,19 +1,29 @@
 # Sample Data
 
-Use these samples to exercise the MVP workflow.
+Use these included samples to exercise the MVP workflow immediately. No sample-generation step is required.
 
 ## Application JSON
 
-- `applications/passing-bourbon.json` — expected values for a passing label.
-- `applications/abv-mismatch.json` — expected ABV differs from the generated label, producing FAIL for Alcohol Content.
+- `applications/passing-bourbon.json` — expected values for the passing bourbon label scenario.
+- `applications/abv-mismatch.json` — expected values with an ABV mismatch; use with the passing bourbon label to produce a FAIL for Alcohol Content.
 
 ## Label Images
 
-Generated PNG labels should be created during setup or via the included sample-generation command if Pillow is available.
+The repository includes these ready-to-use PNG label images:
 
-Planned image files:
+- `labels/passing-bourbon-label.png` — sample label intended to match `passing-bourbon.json`.
+- `labels/government-warning-failure-label.png` — sample label with an invalid/incomplete government warning.
 
-- `labels/passing-bourbon-label.png`
-- `labels/government-warning-failure-label.png`
+## Suggested Manual Checks
 
-The frontend also includes a "Load sample data" button for the passing bourbon scenario.
+1. Passing case:
+   - Click `Load sample data` in the frontend.
+   - Upload `labels/passing-bourbon-label.png`.
+
+2. ABV mismatch case:
+   - Use values from `applications/abv-mismatch.json`.
+   - Upload `labels/passing-bourbon-label.png`.
+
+3. Government warning failure case:
+   - Use values from `applications/passing-bourbon.json`.
+   - Upload `labels/government-warning-failure-label.png`.

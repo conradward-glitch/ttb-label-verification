@@ -120,7 +120,7 @@ MVP should avoid persistent storage.
 
 Prototype security should be sensible but not overbuilt.
 
-- Validate file type and size
+- Validate supported upload file types
 - Do not store uploaded documents long-term
 - Do not require real applicant PII
 - Do not integrate with COLA

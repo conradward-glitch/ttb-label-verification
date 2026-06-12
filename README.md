@@ -24,16 +24,6 @@ The app lets a reviewer upload label artwork, enter expected application data, r
 - No cloud OCR dependency
 - No LLM compliance judge
 
-## Screenshots To Capture Before Submission
-
-After running the app, capture:
-
-- Upload screen
-- Verification results screen
-- Pass example
-- Fail example
-- Review example
-
 ## Architecture Diagram
 
 ```text
@@ -78,23 +68,30 @@ sudo apt-get update
 sudo apt-get install -y tesseract-ocr
 ```
 
-If Tesseract is not installed, the backend returns REVIEW with a clear OCR message instead of crashing. On the current WSL environment, local OCR requires installing `tesseract-ocr`; using Docker avoids that local dependency because the Docker image installs Tesseract automatically.
+If Tesseract is not installed, the backend returns REVIEW with a clear OCR message instead of crashing. In WSL or local Linux environments, OCR requires installing `tesseract-ocr`; using Docker avoids that local dependency because the Docker image installs Tesseract automatically.
 
 ### Backend Dependencies
 
-Recommended with `uv`:
+Recommended with `uv` for one-shot test runs:
 
 ```bash
-uv run --with pytest --with fastapi --with pydantic --with pillow --with pytesseract --with rapidfuzz --with httpx --with python-multipart python -m pytest backend/tests -q
+PYTHONPATH=backend uv run --with pytest --with fastapi --with pydantic --with pillow --with pytesseract --with rapidfuzz --with httpx --with python-multipart python -m pytest backend/tests -q
 ```
 
-Traditional venv:
+Standard Python virtual environment setup:
 
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cd ..
+```
+
+Run the backend from the repository root after activating the virtual environment:
+
+```bash
+PYTHONPATH=backend python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Frontend Dependencies
@@ -244,6 +241,3 @@ Use the included files directly in the UI:
 - `docs/DECISIONS.md`
 - `docs/TROUBLESHOOTING.md`
 
-## GitHub Readiness
-
-See `READY_FOR_GITHUB.md` for the final repository readiness checklist.

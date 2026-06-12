@@ -36,7 +36,6 @@ Create a practical take-home prototype that helps TTB compliance agents verify a
 - `frontend/` — React/Vite/TypeScript UI
 - `backend/` — FastAPI/Python OCR and matching API
 - `samples/` — sample labels and application data
-- `scripts/generate_sample_labels.py` — sample PNG generator
 - `docs/` — architecture, decisions, handoff, troubleshooting
 
 ## How To Run Locally
