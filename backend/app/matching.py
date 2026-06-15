@@ -5,11 +5,17 @@ from typing import Any
 from .warning import validate_government_warning
 
 
+MIN_REVIEW_SIMILARITY = 0.72
+MIN_EVIDENCE_SIMILARITY = 0.55
+
+
 def normalize_text(value: str) -> str:
     value = (value or "").replace("\u2019", "'").replace("\u2018", "'")
     value = value.lower()
     value = re.sub(r"&", " and ", value)
-    value = re.sub(r"[^a-z0-9%./]+", " ", value)
+    value = re.sub(r"['’‘]", "", value)
+    value = re.sub(r"[-–—_/]+", " ", value)
+    value = re.sub(r"[^a-z0-9]+", " ", value)
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -25,7 +31,9 @@ def _field_result(field: str, status: str, expected: str | None, found: str | No
 
 
 def _contains_normalized(ocr_text: str, expected: str) -> bool:
-    return normalize_text(expected) in normalize_text(ocr_text)
+    normalized_expected = normalize_text(expected)
+    normalized_ocr = normalize_text(ocr_text)
+    return bool(normalized_expected and normalized_expected in normalized_ocr)
 
 
 def _similarity(a: str, b: str) -> float:
@@ -51,8 +59,10 @@ def _verify_text_field(field: str, ocr_text: str, expected: str, fuzzy: bool = F
         found, score = _best_line_match(ocr_text, expected)
         if score >= 0.88:
             return _field_result(field, "PASS", expected, found, f"{field} matches after normalization/fuzzy comparison.", found)
-        if score >= 0.72:
+        if score >= MIN_REVIEW_SIMILARITY:
             return _field_result(field, "REVIEW", expected, found, f"{field} may match but requires human review; similarity {score:.0%}.", found)
+        if found and score >= MIN_EVIDENCE_SIMILARITY:
+            return _field_result(field, "REVIEW", expected, found, f"{field} has weak OCR evidence and needs manual review; similarity {score:.0%}.", found)
     return _field_result(field, "FAIL", expected, None, f"{field} from application data was not found on the label.")
 
 
@@ -83,25 +93,49 @@ def _verify_abv(ocr_text: str, expected: str) -> dict[str, Any]:
     return _field_result("Alcohol Content", "FAIL", expected, ", ".join(f"{v:g}% ABV" for v in found_values), f"Alcohol content mismatch: expected {expected_abv:g}% ABV, found {', '.join(f'{v:g}% ABV' for v in found_values)}.")
 
 
+def _normalize_net_contents_text(text: str) -> str:
+    text = (text or "").lower()
+    text = text.replace("\u2019", "'").replace("\u2018", "'")
+    text = re.sub(r"[-–—]+", " ", text)
+    text = re.sub(r"(?<=\d)[oO](?=\s*(?:m\.?\s*l\.?|l\b|lit|oz|fl))", "0", text)
+    text = re.sub(r"\bm\s*[\.]?\s*l\b\.?", " ml ", text)
+    text = re.sub(r"\bf\s*l\s*[\.]?\s*o\s*z\b\.?", " fl oz ", text)
+    text = re.sub(r"\bo\s*z\b\.?", " oz ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _net_contents_tokens(text: str) -> list[str]:
     tokens: list[str] = []
-    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(ml|mL|l|L|liters?|ounces?|oz)\b", text, flags=re.I):
-        number = float(match.group(1))
-        unit = match.group(2).lower()
-        if unit in {"l", "liter", "liters"}:
+    normalized = _normalize_net_contents_text(text)
+    pattern = r"(\d+(?:[\.,]\d+)?)\s*(ml|milliliters?|l|liters?|litres?|ounces?|fl\s*oz|oz)\b"
+    for match in re.finditer(pattern, normalized, flags=re.I):
+        number = float(match.group(1).replace(",", "."))
+        unit = re.sub(r"\s+", " ", match.group(2).lower())
+        if unit in {"l", "liter", "liters", "litre", "litres"}:
             number *= 1000
             unit = "ml"
-        elif unit in {"ml"}:
+        elif unit in {"ml", "milliliter", "milliliters"}:
             unit = "ml"
-        elif unit in {"oz", "ounce", "ounces"}:
+        elif unit in {"oz", "ounce", "ounces", "fl oz"}:
             unit = "oz"
         tokens.append(f"{number:g} {unit}")
     return tokens
 
 
+def _net_contents_evidence_lines(text: str) -> list[str]:
+    evidence: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        normalized = _normalize_net_contents_text(stripped)
+        if re.search(r"\d", normalized) and re.search(r"\b(?:m\s*l|ml|rn\s*l|l|liters?|litres?|ounces?|fl\s*oz|oz)\b", normalized, flags=re.I):
+            evidence.append(stripped)
+    return evidence
+
+
 def _verify_net_contents(ocr_text: str, expected: str) -> dict[str, Any]:
     expected_tokens = _net_contents_tokens(expected)
     found_tokens = _net_contents_tokens(ocr_text)
+    evidence_lines = _net_contents_evidence_lines(ocr_text)
     if not expected_tokens:
         return _field_result("Net Contents", "REVIEW", expected, None, "Application net contents could not be parsed.")
     for expected_token in expected_tokens:
@@ -109,6 +143,9 @@ def _verify_net_contents(ocr_text: str, expected: str) -> dict[str, Any]:
             return _field_result("Net Contents", "PASS", expected, expected_token, "Net contents match the application.", expected_token)
     if found_tokens:
         return _field_result("Net Contents", "FAIL", expected, ", ".join(found_tokens), f"Net contents mismatch: expected {expected_tokens[0]}, found {', '.join(found_tokens)}.")
+    if evidence_lines:
+        evidence = "; ".join(evidence_lines)
+        return _field_result("Net Contents", "REVIEW", expected, evidence, "Net contents evidence exists in OCR text but confidence is too weak; manual review required.", evidence)
     return _field_result("Net Contents", "FAIL", expected, None, "No net contents value was found on the label.")
 
 

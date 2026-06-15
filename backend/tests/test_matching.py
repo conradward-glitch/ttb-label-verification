@@ -20,6 +20,10 @@ def valid_label_text():
     """
 
 
+def field(result, name):
+    return next(field for field in result["fields"] if field["field"] == name)
+
+
 def test_passing_bourbon_label_returns_pass():
     result = verify_application(valid_label_text(), valid_application())
 
@@ -34,7 +38,7 @@ def test_abv_mismatch_returns_fail_with_field_explanation():
     result = verify_application(valid_label_text(), application)
 
     assert result["overall_status"] == "FAIL"
-    abv = next(field for field in result["fields"] if field["field"] == "Alcohol Content")
+    abv = field(result, "Alcohol Content")
     assert abv["status"] == "FAIL"
     assert "expected" in abv["message"].lower()
     assert "found" in abv["message"].lower()
@@ -46,7 +50,7 @@ def test_missing_government_warning_returns_fail():
     result = verify_application(text, valid_application())
 
     assert result["overall_status"] == "FAIL"
-    warning = next(field for field in result["fields"] if field["field"] == "Government Warning")
+    warning = field(result, "Government Warning")
     assert warning["status"] == "FAIL"
     assert "warning" in warning["message"].lower()
 
@@ -58,8 +62,61 @@ def test_brand_name_tolerates_case_and_apostrophe_style():
 
     result = verify_application(text, application)
 
-    brand = next(field for field in result["fields"] if field["field"] == "Brand Name")
+    brand = field(result, "Brand Name")
     assert brand["status"] == "PASS"
+
+
+def test_brand_name_tolerates_case_punctuation_apostrophes_hyphens_and_whitespace():
+    application = valid_application()
+    application["brand_name"] = "Maker's-Mark   Reserve"
+    text = valid_label_text().replace("OLD TOM DISTILLERY", "MAKERS MARK RESERVE")
+
+    result = verify_application(text, application)
+
+    brand = field(result, "Brand Name")
+    assert brand["status"] == "PASS"
+
+
+def test_class_type_tolerates_punctuation_hyphens_and_slashes():
+    application = valid_application()
+    application["class_type"] = "Kentucky Straight-Bourbon/Whiskey"
+    text = valid_label_text().replace("Kentucky Straight Bourbon Whiskey", "kentucky straight bourbon whiskey")
+
+    result = verify_application(text, application)
+
+    class_type = field(result, "Class/Type")
+    assert class_type["status"] == "PASS"
+
+
+def test_weak_brand_ocr_evidence_returns_review_not_fail():
+    text = valid_label_text().replace("OLD TOM DISTILLERY", "Old Torn Distil1ery")
+
+    result = verify_application(text, valid_application())
+
+    brand = field(result, "Brand Name")
+    assert result["overall_status"] == "REVIEW"
+    assert brand["status"] == "REVIEW"
+    assert brand["evidence"] == "Old Torn Distil1ery"
+
+
+def test_net_contents_tolerates_case_punctuation_hyphens_and_whitespace():
+    text = valid_label_text().replace("750 mL", "750-m.l.")
+
+    result = verify_application(text, valid_application())
+
+    net_contents = field(result, "Net Contents")
+    assert net_contents["status"] == "PASS"
+
+
+def test_weak_net_contents_ocr_evidence_returns_review_not_fail():
+    text = valid_label_text().replace("750 mL", "750 rnL")
+
+    result = verify_application(text, valid_application())
+
+    net_contents = field(result, "Net Contents")
+    assert result["overall_status"] == "REVIEW"
+    assert net_contents["status"] == "REVIEW"
+    assert net_contents["evidence"] == "750 rnL"
 
 
 def test_warning_like_ocr_makes_overall_review_not_fail():
@@ -69,6 +126,6 @@ def test_warning_like_ocr_makes_overall_review_not_fail():
     result = verify_application(text, valid_application())
 
     assert result["overall_status"] == "REVIEW"
-    warning = next(field for field in result["fields"] if field["field"] == "Government Warning")
+    warning = field(result, "Government Warning")
     assert warning["status"] == "REVIEW"
     assert "manual review" in warning["message"].lower() or "warning-like" in warning["message"].lower()
