@@ -60,3 +60,15 @@ def test_brand_name_tolerates_case_and_apostrophe_style():
 
     brand = next(field for field in result["fields"] if field["field"] == "Brand Name")
     assert brand["status"] == "PASS"
+
+
+def test_warning_like_ocr_makes_overall_review_not_fail():
+    text = valid_label_text().replace("GOVERNMENT WARNING:", "GOVERNMENT WARNINC")
+    text = text.replace("Surgeon General", "Surgeon Genera1")
+
+    result = verify_application(text, valid_application())
+
+    assert result["overall_status"] == "REVIEW"
+    warning = next(field for field in result["fields"] if field["field"] == "Government Warning")
+    assert warning["status"] == "REVIEW"
+    assert "manual review" in warning["message"].lower() or "warning-like" in warning["message"].lower()

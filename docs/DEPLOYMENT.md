@@ -115,6 +115,7 @@ Use the frontend UI:
 ## Known Deployment Notes
 
 - Render free services may sleep when inactive; first request after sleep can be slow.
-- OCR depends on image quality. Poor scans should return REVIEW rather than overclaiming PASS.
+- Real deployed OCR verification currently runs around 9–11 seconds on Render free tier after wake-up. Sub-5-second verification is a desired optimization target, not a current guarantee.
+- OCR depends on image quality. Poor scans, partial panels, or warning-like but imperfect OCR should return REVIEW rather than overclaiming PASS or issuing a misleading FAIL.
 - No persistent storage is required; uploaded files are processed in-memory for the MVP.
 - Local WSL runs need `tesseract-ocr` installed unless Docker is used.

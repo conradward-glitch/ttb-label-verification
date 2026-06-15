@@ -118,8 +118,8 @@ function App() {
         <section className="panel form-panel">
           <div className="panel-heading row-heading">
             <div>
-              <h2>2. Application Data</h2>
-              <p>Values expected from the submitted application.</p>
+              <h2>2. Submitted Application Data</h2>
+              <p>Simulated COLA/application record values submitted for comparison against the uploaded label.</p>
             </div>
             <button type="button" className="secondary-button" onClick={loadSampleData}>Load sample data</button>
           </div>

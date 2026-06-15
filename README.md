@@ -14,7 +14,7 @@ The app lets a reviewer upload label artwork, enter expected application data, r
   - Alcohol Content
   - Net Contents
 - Field-level verification results
-- Mandatory government warning validation
+- Mandatory government warning validation with conservative REVIEW handling for warning-like OCR and partial label-panel evidence
 - Overall PASS / FAIL / REVIEW status
 - Extracted OCR text display
 - Friendly upload and verification errors
@@ -165,6 +165,7 @@ Render:
 - Environment: Docker.
 - Health check path: `/api/health`.
 - Public app URL serves both API and frontend.
+- Expected runtime on Render free tier is usually around 9–11 seconds for OCR verification after the service is awake; first request after sleep can be slower. The intended sub-5-second target remains a future optimization goal, not the current deployed behavior.
 - See `docs/DEPLOYMENT.md` for exact Render steps.
 
 ## Testing Instructions
