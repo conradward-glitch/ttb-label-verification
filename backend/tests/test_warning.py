@@ -45,3 +45,17 @@ def test_partial_warning_ocr_returns_review_not_fail():
 
     assert result.status == "REVIEW"
     assert "partial" in result.message.lower() or "manual review" in result.message.lower()
+
+
+def test_garbled_warning_with_required_anchors_returns_review_not_fail():
+    ocr_text = """
+    GOVERNMENT WARNING: (1) According 10 the Surgeon General women should not drink
+    alcoholic beverages during pregnancy because of the risk of birth defects.
+    (2) Consumption of alcoholic beverages impairs your ability to drive a car or
+    operate machinery, and may cause health problems.
+    """
+
+    result = validate_government_warning(ocr_text)
+
+    assert result.status == "REVIEW"
+    assert "ocr" in result.message.lower() or "manual review" in result.message.lower()

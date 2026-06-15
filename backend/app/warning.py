@@ -97,10 +97,23 @@ def validate_government_warning(ocr_text: str) -> WarningValidation:
 
     if missing_parts:
         found_count = len(WARNING_PARTS) - len(missing_parts)
+        anchor_count = _anchor_count(normalized)
         later_warning_language_present = "consumption" in normalized and "health problems" in normalized
+        intro_looks_garbled = (
+            missing_parts[0] == "according to the surgeon general"
+            and "government warning" in normalized
+            and "according" in normalized
+            and "surgeon" in normalized
+        )
+        if intro_looks_garbled and found_count >= 2 and anchor_count >= 4:
+            return WarningValidation(
+                "REVIEW",
+                "Government warning-like OCR text was detected, but OCR is too garbled to confirm the exact statutory wording. Manual review is required.",
+                _warning_evidence(compact),
+            )
         if later_warning_language_present:
             return WarningValidation("FAIL", f"Government warning is missing or materially alters required phrase: '{missing_parts[0]}'.")
-        if found_count >= 2 and _anchor_count(normalized) >= 4:
+        if found_count >= 2 and anchor_count >= 4:
             return WarningValidation(
                 "REVIEW",
                 "Partial government warning text was detected, but OCR or the uploaded label panel may not show the full required warning. Manual review is required.",
