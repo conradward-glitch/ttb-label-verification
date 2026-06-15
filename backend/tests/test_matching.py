@@ -129,3 +129,54 @@ def test_warning_like_ocr_makes_overall_review_not_fail():
     warning = field(result, "Government Warning")
     assert warning["status"] == "REVIEW"
     assert "manual review" in warning["message"].lower() or "warning-like" in warning["message"].lower()
+
+
+def test_old_tom_noisy_combined_ocr_returns_sensible_review_not_fail():
+    text = """
+    oLD TON
+    eA SS
+    | KENTUCKY STRAIGHT |,
+    | BOURBONWHISKEY |
+    | HAND-CRAFTED TRADITION |
+    | GOVERNMENT WARNING: (1) According to the |
+    Surgeon General, women should not drink =f /
+    alcoholic beverages during pregnancy because of |
+    the risk of birth defects. (2) Consumption of //
+    alcoholic beverages impairs your ability to”
+    drive a car or operate machinery, {7 .”
+    and may cause health |
+    problems. A
+    OLD TO
+    pist
+    ILLERy
+    te
+    ° was
+    2/ =
+    KENTUCKY. STRA GHT
+    +0
+    f,
+    BOURBON WHISKEY
+    is ae
+    750 mL
+    90 PROOF :
+    HAND: CRAFTED TRADITION
+    GOVERNMENT WARNING: (1) According to the
+    Surgeon General, women should not drink
+    alcoholic beverages during pregnancy because of
+    the risk of birth defects. (2) Consumption of
+    alcoholic beverages impairs your ability to bl
+    drive a car or operate machinery,
+    and may cause health
+    problems
+    HAND- —_ TRADITION
+    problems. 4
+    """
+
+    result = verify_application(text, valid_application())
+
+    assert result["overall_status"] == "REVIEW"
+    assert field(result, "Brand Name")["status"] == "REVIEW"
+    assert field(result, "Class/Type")["status"] == "PASS"
+    assert field(result, "Alcohol Content")["status"] == "PASS"
+    assert field(result, "Net Contents")["status"] == "PASS"
+    assert field(result, "Government Warning")["status"] == "REVIEW"

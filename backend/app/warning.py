@@ -122,6 +122,12 @@ def validate_government_warning(ocr_text: str) -> WarningValidation:
         return WarningValidation("FAIL", f"Government warning is missing or materially alters required phrase: '{missing_parts[0]}'.")
 
     if positions != sorted(positions):
+        if _anchor_count(normalized) >= 6:
+            return WarningValidation(
+                "REVIEW",
+                "Government warning phrases were detected, but OCR duplication or garbling prevents confirming the required order. Manual review is required.",
+                _warning_evidence(compact),
+            )
         return WarningValidation("FAIL", "Government warning phrases are present but not in the required order.")
 
     start = compact.find("GOVERNMENT WARNING:")

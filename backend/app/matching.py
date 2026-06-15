@@ -36,6 +36,39 @@ def _contains_normalized(ocr_text: str, expected: str) -> bool:
     return bool(normalized_expected and normalized_expected in normalized_ocr)
 
 
+def _compact_alnum(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", normalize_text(value))
+
+
+def _contains_compact_normalized(ocr_text: str, expected: str) -> bool:
+    compact_expected = _compact_alnum(expected)
+    compact_ocr = _compact_alnum(ocr_text)
+    return bool(compact_expected and compact_expected in compact_ocr)
+
+
+def _expected_token_evidence(ocr_text: str, expected: str) -> tuple[str, float]:
+    normalized_ocr = normalize_text(ocr_text)
+    compact_ocr = _compact_alnum(ocr_text)
+    expected_tokens = [token for token in normalize_text(expected).split() if len(token) >= 3]
+    if not expected_tokens:
+        return "", 0.0
+
+    matched: list[str] = []
+    for token in expected_tokens:
+        compact_token = _compact_alnum(token)
+        if token in normalized_ocr or compact_token in compact_ocr:
+            matched.append(token)
+            continue
+        if len(compact_token) >= 5 and any(
+            SequenceMatcher(None, compact_token, compact_ocr[start:start + len(compact_token)]).ratio() >= 0.78
+            for start in range(0, max(1, len(compact_ocr) - len(compact_token) + 1))
+        ):
+            matched.append(token)
+
+    coverage = len(matched) / len(expected_tokens)
+    return " ".join(matched), coverage
+
+
 def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, normalize_text(a), normalize_text(b)).ratio()
 
@@ -55,12 +88,17 @@ def _verify_text_field(field: str, ocr_text: str, expected: str, fuzzy: bool = F
         return _field_result(field, "REVIEW", expected, None, f"OCR text is empty; {field} needs manual review.")
     if _contains_normalized(ocr_text, expected):
         return _field_result(field, "PASS", expected, expected, f"{field} appears on the label.", expected)
+    if _contains_compact_normalized(ocr_text, expected):
+        return _field_result(field, "PASS", expected, expected, f"{field} appears on the label after OCR spacing normalization.", expected)
     if fuzzy:
         found, score = _best_line_match(ocr_text, expected)
         if score >= 0.88:
             return _field_result(field, "PASS", expected, found, f"{field} matches after normalization/fuzzy comparison.", found)
         if score >= MIN_REVIEW_SIMILARITY:
             return _field_result(field, "REVIEW", expected, found, f"{field} may match but requires human review; similarity {score:.0%}.", found)
+        token_evidence, token_coverage = _expected_token_evidence(ocr_text, expected)
+        if token_coverage >= 0.66:
+            return _field_result(field, "REVIEW", expected, token_evidence, f"{field} has OCR evidence across multiple lines and needs manual review.", token_evidence)
         if found and score >= MIN_EVIDENCE_SIMILARITY:
             return _field_result(field, "REVIEW", expected, found, f"{field} has weak OCR evidence and needs manual review; similarity {score:.0%}.", found)
     return _field_result(field, "FAIL", expected, None, f"{field} from application data was not found on the label.")
