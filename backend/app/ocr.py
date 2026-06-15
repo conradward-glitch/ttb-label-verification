@@ -1,7 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat, UnidentifiedImageError
 import pytesseract
 
 from .schemas import OcrResult
@@ -94,6 +94,15 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     return image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=140, threshold=3))
 
 
+def _ocr_candidate_images(image: Image.Image) -> list[Image.Image]:
+    """Return a small set of OCR images without making runtime unbounded."""
+    candidates = [image]
+    mean_luminance = ImageStat.Stat(image.convert("L")).mean[0]
+    if mean_luminance < 128:
+        candidates.append(ImageOps.invert(image.convert("L")))
+    return candidates
+
+
 def _combine_ocr_outputs(outputs: list[str]) -> str:
     lines: list[str] = []
     seen: set[str] = set()
@@ -117,7 +126,11 @@ def extract_text_from_image_bytes(image_bytes: bytes, filename: str = "label.png
     try:
         image = Image.open(BytesIO(image_bytes))
         processed = preprocess_image(image)
-        outputs = [pytesseract.image_to_string(processed, config=config) for config in OCR_CONFIGS]
+        outputs = [
+            pytesseract.image_to_string(candidate, config=config)
+            for candidate in _ocr_candidate_images(processed)
+            for config in OCR_CONFIGS
+        ]
         text = _combine_ocr_outputs(outputs)
     except UnidentifiedImageError:
         return OcrResult(text="", status="FAIL", message="Uploaded file could not be read as an image.")
