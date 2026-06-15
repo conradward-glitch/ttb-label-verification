@@ -112,6 +112,17 @@ def test_class_type_tolerates_punctuation_hyphens_and_slashes():
     assert class_type["status"] == "PASS"
 
 
+def test_class_type_passes_when_expected_tokens_are_adjacent_across_lines():
+    text = valid_label_text().replace("Kentucky Straight Bourbon Whiskey", "KENTUCKY STRAIGHT\n    BOURBON WHISKEY")
+
+    result = verify_application(text, valid_application())
+
+    class_type = field(result, "Class/Type")
+    assert class_type["status"] == "PASS"
+    assert class_type["found"] == "KENTUCKY STRAIGHT\nBOURBON WHISKEY"
+    assert class_type["evidence"] == "KENTUCKY STRAIGHT\nBOURBON WHISKEY"
+
+
 def test_weak_brand_ocr_evidence_returns_review_not_fail():
     text = valid_label_text().replace("OLD TOM DISTILLERY", "Old Torn Distil1ery")
 

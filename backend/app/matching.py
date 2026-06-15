@@ -81,11 +81,34 @@ def _best_line_match(ocr_text: str, expected: str) -> tuple[str, float]:
     return max(scored, key=lambda item: item[1])
 
 
+def _ordered_expected_line_evidence(ocr_text: str, expected: str) -> str:
+    expected_tokens = normalize_text(expected).split()
+    if not expected_tokens:
+        return ""
+
+    matched_lines: list[str] = []
+    token_index = 0
+    for line in (line.strip() for line in ocr_text.splitlines() if line.strip()):
+        matched_on_line = False
+        for token in normalize_text(line).split():
+            if token_index < len(expected_tokens) and token == expected_tokens[token_index]:
+                token_index += 1
+                matched_on_line = True
+        if matched_on_line and (not matched_lines or matched_lines[-1] != line):
+            matched_lines.append(line)
+        if token_index == len(expected_tokens):
+            return "\n".join(matched_lines)
+    return ""
+
+
 def _verify_text_field(field: str, ocr_text: str, expected: str, fuzzy: bool = False) -> dict[str, Any]:
     if not expected:
         return _field_result(field, "REVIEW", expected, None, f"{field} was not supplied in the application data.")
     if not ocr_text.strip():
         return _field_result(field, "REVIEW", expected, None, f"OCR text is empty; {field} needs manual review.")
+    ordered_evidence = _ordered_expected_line_evidence(ocr_text, expected)
+    if ordered_evidence:
+        return _field_result(field, "PASS", expected, ordered_evidence, f"{field} appears on the label.", ordered_evidence)
     if _contains_normalized(ocr_text, expected):
         return _field_result(field, "PASS", expected, expected, f"{field} appears on the label.", expected)
     if _contains_compact_normalized(ocr_text, expected):
