@@ -44,6 +44,30 @@ def test_abv_mismatch_returns_fail_with_field_explanation():
     assert "found" in abv["message"].lower()
 
 
+def test_proof_only_alcohol_match_displays_raw_proof_and_normalized_abv():
+    text = valid_label_text().replace("45% Alc./Vol. (90 Proof)", "90 PROOF")
+
+    result = verify_application(text, valid_application())
+
+    abv = field(result, "Alcohol Content")
+    assert abv["status"] == "PASS"
+    assert abv["found"] == "90 PROOF"
+    assert abv["evidence"] == "Normalized: 45% ABV"
+    assert abv["message"] == "Alcohol content matches the application because 90 proof is equivalent to 45% ABV."
+
+
+def test_literal_abv_match_displays_literal_abv_as_found():
+    text = valid_label_text().replace("45% Alc./Vol. (90 Proof)", "45% ABV")
+
+    result = verify_application(text, valid_application())
+
+    abv = field(result, "Alcohol Content")
+    assert abv["status"] == "PASS"
+    assert abv["found"] == "45% ABV"
+    assert abv["evidence"] == "45% ABV"
+    assert abv["message"] == "Alcohol content matches the application."
+
+
 def test_missing_government_warning_returns_fail():
     text = "OLD TOM DISTILLERY Kentucky Straight Bourbon Whiskey 45% Alc./Vol. (90 Proof) 750 mL"
 

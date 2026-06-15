@@ -104,31 +104,52 @@ def _verify_text_field(field: str, ocr_text: str, expected: str, fuzzy: bool = F
     return _field_result(field, "FAIL", expected, None, f"{field} from application data was not found on the label.")
 
 
-def extract_abv_values(text: str) -> list[float]:
-    values: list[float] = []
+def _format_abv(value: float) -> str:
+    return f"{value:g}% ABV"
+
+
+def _extract_abv_matches(text: str) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
     for match in re.finditer(r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:alc\.?/?vol\.?|abv|alcohol|)?", text, flags=re.I):
         value = float(match.group(1))
         if 0 < value <= 100:
-            values.append(value)
+            matches.append({"value": value, "found": _format_abv(value), "source": "abv"})
     for match in re.finditer(r"(\d{1,3}(?:\.\d+)?)\s*proof", text, flags=re.I):
         proof = float(match.group(1))
         if 0 < proof <= 200:
-            values.append(proof / 2)
-    return values
+            matches.append({"value": proof / 2, "found": f"{proof:g} PROOF", "source": "proof", "proof": proof})
+    return matches
+
+
+def extract_abv_values(text: str) -> list[float]:
+    return [match["value"] for match in _extract_abv_matches(text)]
 
 
 def _verify_abv(ocr_text: str, expected: str) -> dict[str, Any]:
     expected_values = extract_abv_values(expected)
-    found_values = extract_abv_values(ocr_text)
+    found_matches = _extract_abv_matches(ocr_text)
     if not expected_values:
         return _field_result("Alcohol Content", "REVIEW", expected, None, "Application alcohol content could not be parsed.")
-    if not found_values:
+    if not found_matches:
         return _field_result("Alcohol Content", "FAIL", expected, None, "No alcohol content value was found on the label.")
     expected_abv = expected_values[0]
-    for found in found_values:
+    for match in found_matches:
+        found = match["value"]
         if abs(found - expected_abv) <= 0.1:
-            return _field_result("Alcohol Content", "PASS", expected, f"{found:g}% ABV", "Alcohol content matches the application.", f"{found:g}% ABV")
-    return _field_result("Alcohol Content", "FAIL", expected, ", ".join(f"{v:g}% ABV" for v in found_values), f"Alcohol content mismatch: expected {expected_abv:g}% ABV, found {', '.join(f'{v:g}% ABV' for v in found_values)}.")
+            normalized = _format_abv(found)
+            if match["source"] == "proof":
+                proof = match["proof"]
+                return _field_result(
+                    "Alcohol Content",
+                    "PASS",
+                    expected,
+                    match["found"],
+                    f"Alcohol content matches the application because {proof:g} proof is equivalent to {normalized}.",
+                    f"Normalized: {normalized}",
+                )
+            return _field_result("Alcohol Content", "PASS", expected, match["found"], "Alcohol content matches the application.", match["found"])
+    found_values = [match["value"] for match in found_matches]
+    return _field_result("Alcohol Content", "FAIL", expected, ", ".join(_format_abv(v) for v in found_values), f"Alcohol content mismatch: expected {expected_abv:g}% ABV, found {', '.join(_format_abv(v) for v in found_values)}.")
 
 
 def _normalize_net_contents_text(text: str) -> str:
