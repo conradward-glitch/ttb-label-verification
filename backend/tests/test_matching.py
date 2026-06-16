@@ -7,7 +7,7 @@ def valid_application():
         "class_type": "Kentucky Straight Bourbon Whiskey",
         "alcohol_content": "45% Alc./Vol. (90 Proof)",
         "net_contents": "750 mL",
-        "bottler_producer": "Bottled by Commonwealth Bottling Co., Louisville, KY",
+        "bottler_producer": "Bottled by Old Tom Distillery, Louisville, KY",
         "country_of_origin": "",
     }
 
@@ -18,7 +18,7 @@ def valid_label_text():
     Kentucky Straight Bourbon Whiskey
     45% Alc./Vol. (90 Proof)
     750 mL
-    Bottled by Commonwealth Bottling Co., Louisville, KY
+    Bottled by Old Tom Distillery, Louisville, KY
     GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
     """
 
@@ -72,7 +72,7 @@ def test_literal_abv_match_displays_literal_abv_as_found():
 
 
 def test_missing_government_warning_returns_fail():
-    text = "OLD TOM DISTILLERY Kentucky Straight Bourbon Whiskey 45% Alc./Vol. (90 Proof) 750 mL Bottled by Commonwealth Bottling Co., Louisville, KY"
+    text = "OLD TOM DISTILLERY Kentucky Straight Bourbon Whiskey 45% Alc./Vol. (90 Proof) 750 mL Bottled by Old Tom Distillery, Louisville, KY"
 
     result = verify_application(text, valid_application())
 
@@ -87,7 +87,7 @@ def test_bottler_producer_name_and_address_is_verified_like_text_field():
 
     bottler = field(result, "Bottler/Producer Name and Address")
     assert bottler["status"] == "PASS"
-    assert "Bottled by Commonwealth Bottling Co." in bottler["found"]
+    assert "Bottled by Old Tom Distillery" in bottler["found"]
 
 
 def test_country_of_origin_blank_is_not_checked_or_failed():
@@ -100,7 +100,7 @@ def test_country_of_origin_blank_is_not_checked_or_failed():
 def test_country_of_origin_is_verified_when_provided():
     application = valid_application()
     application["country_of_origin"] = "Product of Mexico"
-    text = valid_label_text().replace("Bottled by Commonwealth Bottling Co., Louisville, KY", "Bottled by Commonwealth Bottling Co., Louisville, KY\nProduct of Mexico")
+    text = valid_label_text().replace("Bottled by Old Tom Distillery, Louisville, KY", "Bottled by Old Tom Distillery, Louisville, KY\nProduct of Mexico")
 
     result = verify_application(text, application)
 
@@ -154,9 +154,12 @@ def test_class_type_passes_when_expected_tokens_are_adjacent_across_lines():
 
 
 def test_weak_brand_ocr_evidence_returns_review_not_fail():
+    application = valid_application()
+    application["bottler_producer"] = "Bottled by OTD, Louisville, KY"
     text = valid_label_text().replace("OLD TOM DISTILLERY", "Old Torn Distil1ery")
+    text = text.replace("Bottled by Old Tom Distillery, Louisville, KY", "Bottled by OTD, Louisville, KY")
 
-    result = verify_application(text, valid_application())
+    result = verify_application(text, application)
 
     brand = field(result, "Brand Name")
     assert result["overall_status"] == "REVIEW"
@@ -224,7 +227,7 @@ def test_old_tom_noisy_combined_ocr_returns_sensible_review_not_fail():
     is ae
     750 mL
     90 PROOF :
-    Bottled by Commonwealth Bottling Co., Louisville, KY
+    Bottled by OTD, Louisville, KY
     HAND: CRAFTED TRADITION
     GOVERNMENT WARNING: (1) According to the
     Surgeon General, women should not drink
@@ -238,7 +241,9 @@ def test_old_tom_noisy_combined_ocr_returns_sensible_review_not_fail():
     problems. 4
     """
 
-    result = verify_application(text, valid_application())
+    application = valid_application()
+    application["bottler_producer"] = "Bottled by OTD, Louisville, KY"
+    result = verify_application(text, application)
 
     assert result["overall_status"] == "REVIEW"
     assert field(result, "Brand Name")["status"] == "REVIEW"

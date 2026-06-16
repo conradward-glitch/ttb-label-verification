@@ -7,7 +7,7 @@ import './styles.css';
 const defaultApplication: ApplicationData = {
   brand_name: 'OLD TOM DISTILLERY',
   class_type: 'Kentucky Straight Bourbon Whiskey',
-  bottler_producer: 'Bottled by Commonwealth Bottling Co., Louisville, KY',
+  bottler_producer: 'Bottled by Old Tom Distillery, Louisville, KY',
   alcohol_content: '45% Alc./Vol. (90 Proof)',
   net_contents: '750 mL',
   country_of_origin: ''
