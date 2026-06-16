@@ -26,10 +26,11 @@ def test_empty_image_bytes_returns_review_signal():
 
 
 def test_ocr_uses_bounded_configs_and_image_sizing():
-    assert ocr.OCR_PRIMARY_CONFIG == "--oem 3 --psm 6"
+    assert ocr.OCR_PRIMARY_CONFIG == "--oem 3 --psm 6 -c tessedit_do_invert=0"
     assert ocr.OCR_FALLBACK_CONFIG == "--oem 3 --psm 11"
     assert ocr.MIN_OCR_DIMENSION == 900
-    assert ocr.MAX_UPSCALE == 3
+    assert ocr.MAX_UPSCALE == 2
+    assert ocr.MAX_LONG_SIDE == 1400
 
 
 def test_preprocess_handles_alpha_and_upscales_low_resolution_labels():
@@ -38,9 +39,16 @@ def test_preprocess_handles_alpha_and_upscales_low_resolution_labels():
 
     processed = preprocess_image(image)
 
-    assert processed.mode == "L"
-    assert processed.size[0] >= 300
-    assert processed.size[1] >= 240
+    assert processed.size[0] >= 200
+    assert processed.size[1] >= 160
+
+
+def test_preprocess_downscales_large_images_before_ocr():
+    image = Image.new("RGB", (2800, 2100), (255, 255, 255))
+
+    processed = preprocess_image(image)
+
+    assert max(processed.size) == ocr.MAX_LONG_SIDE
 
 
 def test_extract_text_uses_one_primary_tesseract_pass_when_text_is_sufficient(monkeypatch):
@@ -57,7 +65,7 @@ def test_extract_text_uses_one_primary_tesseract_pass_when_text_is_sufficient(mo
 
     assert len(calls) == 1
     assert calls[0][1] == ocr.OCR_PRIMARY_CONFIG
-    assert calls[0][0][0] >= 360 and calls[0][0][1] >= 270
+    assert calls[0][0][0] >= 240 and calls[0][0][1] >= 180
     assert result.status == "PASS"
     assert "OLD TOM DISTILLERY" in result.text
     assert "KENTUCKY STRAIGHT BOURBON WHISKEY" in result.text

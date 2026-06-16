@@ -3,16 +3,17 @@ from io import BytesIO
 from pathlib import Path
 from time import perf_counter
 
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat, UnidentifiedImageError
+from PIL import Image, ImageChops, ImageOps, ImageStat, UnidentifiedImageError
 import pytesseract
 
 from .schemas import OcrResult
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
-OCR_PRIMARY_CONFIG = "--oem 3 --psm 6"
+OCR_PRIMARY_CONFIG = "--oem 3 --psm 6 -c tessedit_do_invert=0"
 OCR_FALLBACK_CONFIG = "--oem 3 --psm 11"
 MIN_OCR_DIMENSION = 900
-MAX_UPSCALE = 3
+MAX_UPSCALE = 2
+MAX_LONG_SIDE = 1400
 WEAK_OCR_TEXT_LENGTH = 40
 logger = logging.getLogger(__name__)
 
@@ -80,23 +81,27 @@ def _crop_uniform_margins(image: Image.Image) -> Image.Image:
     return image
 
 
-def _upscale_for_ocr(image: Image.Image) -> Image.Image:
+def _resize_for_ocr(image: Image.Image) -> Image.Image:
     longest_side = max(image.size)
-    if longest_side <= 0 or longest_side >= MIN_OCR_DIMENSION:
+    if longest_side <= 0:
         return image
-    scale = min(MAX_UPSCALE, max(3, round(MIN_OCR_DIMENSION / longest_side)))
+    if longest_side > MAX_LONG_SIDE:
+        scale = MAX_LONG_SIDE / longest_side
+        return image.resize((round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS)
+    if longest_side >= MIN_OCR_DIMENSION:
+        return image
+    scale = min(MAX_UPSCALE, max(1, round(MIN_OCR_DIMENSION / longest_side)))
+    if scale <= 1:
+        return image
     return image.resize((image.width * scale, image.height * scale), Image.Resampling.LANCZOS)
 
 
 def preprocess_image(image: Image.Image) -> Image.Image:
     image = _flatten_alpha(image)
     image = _crop_uniform_margins(image)
-    image = _upscale_for_ocr(image)
+    image = _resize_for_ocr(image)
     image = image.convert("L")
-    image = ImageOps.autocontrast(image)
-    image = ImageEnhance.Contrast(image).enhance(2.0)
-    image = ImageEnhance.Sharpness(image).enhance(1.8)
-    return image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=140, threshold=3))
+    return ImageOps.autocontrast(image)
 
 
 def _fallback_ocr_image(image: Image.Image) -> Image.Image:
