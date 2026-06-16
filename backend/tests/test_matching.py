@@ -7,6 +7,8 @@ def valid_application():
         "class_type": "Kentucky Straight Bourbon Whiskey",
         "alcohol_content": "45% Alc./Vol. (90 Proof)",
         "net_contents": "750 mL",
+        "bottler_producer": "Bottled by Old Tom Distillery, Louisville, KY",
+        "country_of_origin": "",
     }
 
 
@@ -78,6 +80,77 @@ def test_missing_government_warning_returns_fail():
     warning = field(result, "Government Warning")
     assert warning["status"] == "FAIL"
     assert "warning" in warning["message"].lower()
+
+
+def test_bottler_producer_missing_from_application_returns_review():
+    application = valid_application()
+    application["bottler_producer"] = ""
+
+    result = verify_application(valid_label_text(), application)
+
+    bottler = field(result, "Bottler/Producer Name and Address")
+    assert result["overall_status"] == "REVIEW"
+    assert bottler["status"] == "REVIEW"
+    assert "not supplied" in bottler["message"].lower()
+
+
+def test_bottler_producer_present_and_found_returns_pass():
+    result = verify_application(valid_label_text(), valid_application())
+
+    bottler = field(result, "Bottler/Producer Name and Address")
+    assert bottler["status"] == "PASS"
+    assert "Old Tom Distillery" in bottler["evidence"]
+
+
+def test_bottler_producer_present_and_absent_returns_fail_or_review():
+    application = valid_application()
+    application["bottler_producer"] = "Bottled by Different Distillery, Nashville, TN"
+
+    result = verify_application(valid_label_text(), application)
+
+    bottler = field(result, "Bottler/Producer Name and Address")
+    assert bottler["status"] in {"FAIL", "REVIEW"}
+    assert bottler["status"] != "PASS"
+
+
+def test_country_of_origin_blank_is_ignored():
+    result = verify_application(valid_label_text(), valid_application())
+
+    assert all(field["field"] != "Country of Origin" for field in result["fields"])
+    assert result["overall_status"] == "PASS"
+
+
+def test_country_of_origin_supplied_and_present_returns_pass():
+    application = valid_application()
+    application["country_of_origin"] = "Mexico"
+    text = valid_label_text() + "\nProduct of Mexico"
+
+    result = verify_application(text, application)
+
+    country = field(result, "Country of Origin")
+    assert country["status"] == "PASS"
+
+
+def test_country_of_origin_usa_passes_from_state_address_evidence():
+    application = valid_application()
+    application["country_of_origin"] = "USA"
+
+    result = verify_application(valid_label_text(), application)
+
+    country = field(result, "Country of Origin")
+    assert country["status"] == "PASS"
+    assert country["evidence"]
+
+
+def test_country_of_origin_supplied_and_absent_returns_fail_or_review():
+    application = valid_application()
+    application["country_of_origin"] = "France"
+
+    result = verify_application(valid_label_text(), application)
+
+    country = field(result, "Country of Origin")
+    assert country["status"] in {"FAIL", "REVIEW"}
+    assert country["status"] != "PASS"
 
 
 def test_brand_name_tolerates_case_and_apostrophe_style():

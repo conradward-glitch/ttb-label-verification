@@ -236,14 +236,38 @@ def _verify_warning(ocr_text: str) -> dict[str, Any]:
     return _field_result("Government Warning", result.status, "Standard required warning", "Detected" if result.evidence else None, result.message, result.evidence)
 
 
+US_COUNTRY_VALUES = {"usa", "us", "u s a", "u s", "united states", "united states of america", "america"}
+US_STATE_EVIDENCE_PATTERN = re.compile(
+    r"\b(?:"
+    r"AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|"
+    r"Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming"
+    r")\b",
+    flags=re.I,
+)
+
+
+def _verify_country_of_origin(ocr_text: str, expected: str) -> dict[str, Any] | None:
+    if not expected:
+        return None
+    if normalize_text(expected) in US_COUNTRY_VALUES:
+        for line in (line.strip() for line in ocr_text.splitlines() if line.strip()):
+            if US_STATE_EVIDENCE_PATTERN.search(line):
+                return _field_result("Country of Origin", "PASS", expected, line, "Country of Origin is satisfied by U.S. state/address evidence on the label.", line)
+    return _verify_text_field("Country of Origin", ocr_text, expected, fuzzy=True)
+
+
 def verify_application(ocr_text: str, application_data: dict[str, Any]) -> dict[str, Any]:
     fields = [
         _verify_text_field("Brand Name", ocr_text, application_data.get("brand_name", ""), fuzzy=True),
         _verify_text_field("Class/Type", ocr_text, application_data.get("class_type", ""), fuzzy=True),
+        _verify_text_field("Bottler/Producer Name and Address", ocr_text, application_data.get("bottler_producer", ""), fuzzy=True),
         _verify_abv(ocr_text, application_data.get("alcohol_content", "")),
         _verify_net_contents(ocr_text, application_data.get("net_contents", "")),
         _verify_warning(ocr_text),
     ]
+    country_result = _verify_country_of_origin(ocr_text, application_data.get("country_of_origin", ""))
+    if country_result:
+        fields.append(country_result)
     statuses = [field["status"] for field in fields]
     if "FAIL" in statuses:
         overall = "FAIL"
