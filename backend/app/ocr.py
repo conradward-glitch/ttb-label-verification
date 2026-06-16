@@ -20,7 +20,7 @@ MAX_UPSCALE = 2
 MAX_LONG_SIDE = 1400
 WEAK_OCR_TEXT_LENGTH = 40
 CLAUDE_VISION_API_URL = "https://api.anthropic.com/v1/messages"
-CLAUDE_VISION_MODEL = "claude-3-5-sonnet-latest"
+CLAUDE_VISION_MODEL = "claude-sonnet-4-6"
 CLAUDE_VISION_TIMEOUT_SECONDS = 20
 logger = logging.getLogger(__name__)
 

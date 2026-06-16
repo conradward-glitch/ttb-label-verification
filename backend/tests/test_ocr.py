@@ -34,6 +34,10 @@ def test_ocr_uses_bounded_configs_and_image_sizing():
     assert ocr.MAX_LONG_SIDE == 1400
 
 
+def test_claude_vision_uses_current_sonnet_model():
+    assert ocr.CLAUDE_VISION_MODEL == "claude-sonnet-4-6"
+
+
 def test_preprocess_handles_alpha_and_upscales_low_resolution_labels():
     image = Image.new("RGBA", (100, 80), (0, 0, 0, 0))
     image.paste((12, 24, 36, 255), (20, 20, 80, 60))
