@@ -1,7 +1,11 @@
+import base64
+import json
 import logging
+import os
 from io import BytesIO
 from pathlib import Path
 from time import perf_counter
+from urllib.request import Request, urlopen
 
 from PIL import Image, ImageChops, ImageOps, ImageStat, UnidentifiedImageError
 import pytesseract
@@ -15,6 +19,9 @@ MIN_OCR_DIMENSION = 900
 MAX_UPSCALE = 2
 MAX_LONG_SIDE = 1400
 WEAK_OCR_TEXT_LENGTH = 40
+CLAUDE_VISION_API_URL = "https://api.anthropic.com/v1/messages"
+CLAUDE_VISION_MODEL = "claude-3-5-sonnet-latest"
+CLAUDE_VISION_TIMEOUT_SECONDS = 20
 logger = logging.getLogger(__name__)
 
 
@@ -128,6 +135,76 @@ def _combine_ocr_outputs(outputs: list[str]) -> str:
     return "\n".join(lines)
 
 
+def _image_media_type(filename: str) -> str:
+    extension = Path(filename or "").suffix.lower()
+    if extension == ".png":
+        return "image/png"
+    return "image/jpeg"
+
+
+def _extract_text_with_claude_vision(image_bytes: bytes, filename: str) -> str | None:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    payload = {
+        "model": CLAUDE_VISION_MODEL,
+        "max_tokens": 1200,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": _image_media_type(filename),
+                            "data": base64.b64encode(image_bytes).decode("ascii"),
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Transcribe all visible text from this alcohol beverage label. "
+                            "Return plain OCR text only. Preserve line breaks when useful. "
+                            "Do not summarize, explain, classify, or add text that is not visible."
+                        ),
+                    },
+                ],
+            }
+        ],
+    }
+    request = Request(
+        CLAUDE_VISION_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    started_at = perf_counter()
+    try:
+        with urlopen(request, timeout=CLAUDE_VISION_TIMEOUT_SECONDS) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        logger.info("Claude Vision OCR failed in %.3fs; falling back to Tesseract: %s", perf_counter() - started_at, exc)
+        return None
+
+    text_blocks = [
+        block.get("text", "")
+        for block in response_payload.get("content", [])
+        if isinstance(block, dict) and block.get("type") == "text"
+    ]
+    text = _combine_ocr_outputs(text_blocks).strip()
+    logger.info("Claude Vision OCR completed in %.3fs", perf_counter() - started_at)
+    if len(text) < 20:
+        logger.info("Claude Vision OCR returned too little text; falling back to Tesseract")
+        return None
+    return text
+
+
 def extract_text_from_image_bytes(image_bytes: bytes, filename: str = "label.png") -> OcrResult:
     total_started_at = perf_counter()
     if not image_bytes:
@@ -136,6 +213,10 @@ def extract_text_from_image_bytes(image_bytes: bytes, filename: str = "label.png
         return OcrResult(text="", status="FAIL", message="Only PNG or JPG label images are supported.")
     try:
         image = Image.open(BytesIO(image_bytes))
+        claude_text = _extract_text_with_claude_vision(image_bytes, filename)
+        if claude_text:
+            logger.info("OCR extraction completed in %.3fs", perf_counter() - total_started_at)
+            return OcrResult(text=claude_text, status="PASS", message="Claude Vision OCR completed successfully.")
 
         preprocess_started_at = perf_counter()
         processed = preprocess_image(image)

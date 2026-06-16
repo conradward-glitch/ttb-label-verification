@@ -7,7 +7,7 @@ The app lets a reviewer upload label artwork, enter expected application data, r
 ## Features
 
 - Single-label PNG/JPG upload
-- OCR extraction through Tesseract / pytesseract
+- OCR extraction through optional Claude Vision primary OCR when `ANTHROPIC_API_KEY` is set, with Tesseract / pytesseract as the local fallback
 - Application data entry for the core take-home workflow:
   - Brand Name
   - Class/Type
@@ -20,7 +20,7 @@ The app lets a reviewer upload label artwork, enter expected application data, r
 - Sample label/application test cases
 - No database
 - No COLA integration
-- No cloud OCR dependency
+- No external AI call is required for baseline operation
 - No LLM compliance judge
 
 ## Architecture Diagram
@@ -34,7 +34,7 @@ React + Vite + TypeScript Frontend
   v
 FastAPI Backend
   |
-  +--> OCR Pipeline: Pillow preprocessing + Tesseract OCR
+  +--> OCR Pipeline: optional Claude Vision primary OCR + local Tesseract fallback
   |
   +--> Matching Engine: deterministic field checks
   |
@@ -48,7 +48,7 @@ Structured PASS / FAIL / REVIEW Result JSON
 
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI + Python
-- OCR: Tesseract via pytesseract
+- OCR: optional Claude Vision primary OCR when `ANTHROPIC_API_KEY` is set; Tesseract via pytesseract remains the local fallback when the key is missing or the API fails
 - Image preprocessing: Pillow
 - Matching: deterministic Python normalization, regex, and conservative fuzzy logic
 - Tests: pytest
@@ -163,6 +163,7 @@ Render:
 - Root directory: repository root.
 - Environment: Docker.
 - Health check path: `/api/health`.
+- Optional environment variable: `ANTHROPIC_API_KEY` enables Claude Vision as the primary OCR path. If it is not set, or if the API fails, the app uses local Tesseract OCR fallback. No external AI call is required for baseline operation.
 - Public app URL serves both API and frontend.
 - Expected runtime on Render free tier is usually around 9–11 seconds for OCR verification after the service is awake; first request after sleep can be slower. The intended sub-5-second target remains a future optimization goal, not the current deployed behavior.
 - See `docs/DEPLOYMENT.md` for exact Render steps.

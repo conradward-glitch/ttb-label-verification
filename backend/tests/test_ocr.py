@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 
 from PIL import Image, ImageStat
@@ -129,3 +130,93 @@ def test_extract_text_logs_preprocessing_ocr_and_total_timing(monkeypatch, caplo
     assert "OCR preprocessing completed" in messages
     assert "OCR pass completed" in messages
     assert "OCR extraction completed" in messages
+
+
+class FakeClaudeResponse:
+    def __init__(self, payload: dict):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self):
+        return json.dumps(self.payload).encode("utf-8")
+
+
+def test_claude_vision_success_is_used_before_tesseract(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append((request, timeout))
+        return FakeClaudeResponse(
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "OLD TOM DISTILLERY\nKentucky Straight Bourbon Whiskey\n45% Alc./Vol. (90 Proof)\n750 mL",
+                    }
+                ]
+            }
+        )
+
+    def fail_if_tesseract_runs(image, config):
+        raise AssertionError("Tesseract should not run when Claude Vision returns usable OCR text")
+
+    monkeypatch.setattr(ocr, "urlopen", fake_urlopen, raising=False)
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fail_if_tesseract_runs)
+
+    result = extract_text_from_image_bytes(png_bytes(Image.new("RGB", (160, 120), (240, 240, 240))), "label.png")
+
+    assert result.status == "PASS"
+    assert result.message == "Claude Vision OCR completed successfully."
+    assert "OLD TOM DISTILLERY" in result.text
+    assert len(requests) == 1
+    assert requests[0][1] == ocr.CLAUDE_VISION_TIMEOUT_SECONDS
+
+
+def test_missing_anthropic_key_preserves_tesseract_behavior(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    calls = []
+
+    def fail_if_claude_runs(request, timeout):
+        raise AssertionError("Claude Vision should not run without ANTHROPIC_API_KEY")
+
+    def fake_image_to_string(image, config):
+        calls.append(config)
+        return "OLD TOM DISTILLERY\nKENTUCKY STRAIGHT BOURBON WHISKEY\n45% Alc./Vol. (90 Proof)\n750 mL\n"
+
+    monkeypatch.setattr(ocr, "urlopen", fail_if_claude_runs, raising=False)
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_image_to_string)
+
+    result = extract_text_from_image_bytes(png_bytes(Image.new("RGB", (160, 120), (240, 240, 240))), "label.png")
+
+    assert calls == [ocr.OCR_PRIMARY_CONFIG]
+    assert result.status == "PASS"
+    assert result.message == "OCR completed successfully."
+    assert "OLD TOM DISTILLERY" in result.text
+
+
+def test_claude_vision_failure_falls_back_to_tesseract(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    tesseract_calls = []
+
+    def fail_claude(request, timeout):
+        raise RuntimeError("claude unavailable")
+
+    def fake_image_to_string(image, config):
+        tesseract_calls.append(config)
+        return "OLD TOM DISTILLERY\nKENTUCKY STRAIGHT BOURBON WHISKEY\n45% Alc./Vol. (90 Proof)\n750 mL\n"
+
+    monkeypatch.setattr(ocr, "urlopen", fail_claude, raising=False)
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_image_to_string)
+
+    result = extract_text_from_image_bytes(png_bytes(Image.new("RGB", (160, 120), (240, 240, 240))), "label.png")
+
+    assert tesseract_calls == [ocr.OCR_PRIMARY_CONFIG]
+    assert result.status == "PASS"
+    assert result.message == "OCR completed successfully."
+    assert "OLD TOM DISTILLERY" in result.text
