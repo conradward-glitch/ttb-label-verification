@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -24,8 +25,9 @@ app.add_middleware(
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, Any]:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    return {"status": "ok", "key_loaded": bool(key), "key_prefix": key[:8] if key else "none"}
 
 
 @app.post("/api/ocr")
