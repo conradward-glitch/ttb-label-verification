@@ -22,10 +22,8 @@ class FieldResult(BaseModel):
 class ApplicationData(BaseModel):
     brand_name: str = ""
     class_type: str = ""
-    bottler_producer: str = ""
     alcohol_content: str = ""
     net_contents: str = ""
-    country_of_origin: str = ""
 
 
 class VerificationResponse(BaseModel):

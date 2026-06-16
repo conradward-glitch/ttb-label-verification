@@ -3,10 +3,8 @@ export type Status = 'PASS' | 'FAIL' | 'REVIEW';
 export interface ApplicationData {
   brand_name: string;
   class_type: string;
-  bottler_producer: string;
   alcohol_content: string;
   net_contents: string;
-  country_of_origin: string;
 }
 
 export interface FieldResult {

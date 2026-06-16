@@ -7,8 +7,6 @@ def valid_application():
         "class_type": "Kentucky Straight Bourbon Whiskey",
         "alcohol_content": "45% Alc./Vol. (90 Proof)",
         "net_contents": "750 mL",
-        "bottler_producer": "Bottled by Old Tom Distillery, Louisville, KY",
-        "country_of_origin": "",
     }
 
 
@@ -82,33 +80,6 @@ def test_missing_government_warning_returns_fail():
     assert "warning" in warning["message"].lower()
 
 
-def test_bottler_producer_name_and_address_is_verified_like_text_field():
-    result = verify_application(valid_label_text(), valid_application())
-
-    bottler = field(result, "Bottler/Producer Name and Address")
-    assert bottler["status"] == "PASS"
-    assert "Bottled by Old Tom Distillery" in bottler["found"]
-
-
-def test_country_of_origin_blank_is_not_checked_or_failed():
-    result = verify_application(valid_label_text(), valid_application())
-
-    assert result["overall_status"] == "PASS"
-    assert not [item for item in result["fields"] if item["field"] == "Country of Origin"]
-
-
-def test_country_of_origin_is_verified_when_provided():
-    application = valid_application()
-    application["country_of_origin"] = "Product of Mexico"
-    text = valid_label_text().replace("Bottled by Old Tom Distillery, Louisville, KY", "Bottled by Old Tom Distillery, Louisville, KY\nProduct of Mexico")
-
-    result = verify_application(text, application)
-
-    country = field(result, "Country of Origin")
-    assert country["status"] == "PASS"
-    assert country["found"] == "Product of Mexico"
-
-
 def test_brand_name_tolerates_case_and_apostrophe_style():
     application = valid_application()
     application["brand_name"] = "Stone's Throw"
@@ -154,12 +125,10 @@ def test_class_type_passes_when_expected_tokens_are_adjacent_across_lines():
 
 
 def test_weak_brand_ocr_evidence_returns_review_not_fail():
-    application = valid_application()
-    application["bottler_producer"] = "Bottled by OTD, Louisville, KY"
     text = valid_label_text().replace("OLD TOM DISTILLERY", "Old Torn Distil1ery")
     text = text.replace("Bottled by Old Tom Distillery, Louisville, KY", "Bottled by OTD, Louisville, KY")
 
-    result = verify_application(text, application)
+    result = verify_application(text, valid_application())
 
     brand = field(result, "Brand Name")
     assert result["overall_status"] == "REVIEW"
@@ -241,9 +210,7 @@ def test_old_tom_noisy_combined_ocr_returns_sensible_review_not_fail():
     problems. 4
     """
 
-    application = valid_application()
-    application["bottler_producer"] = "Bottled by OTD, Louisville, KY"
-    result = verify_application(text, application)
+    result = verify_application(text, valid_application())
 
     assert result["overall_status"] == "REVIEW"
     assert field(result, "Brand Name")["status"] == "REVIEW"

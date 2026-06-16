@@ -7,7 +7,8 @@ import pytesseract
 from .schemas import OcrResult
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
-OCR_CONFIGS = ("--oem 3 --psm 6", "--oem 3 --psm 11", "--oem 3 --psm 4")
+PRIMARY_OCR_CONFIG = "--oem 3 --psm 6"
+FALLBACK_OCR_CONFIG = "--oem 3 --psm 11"
 MIN_OCR_DIMENSION = 1200
 MAX_UPSCALE = 4
 
@@ -94,13 +95,13 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     return image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=140, threshold=3))
 
 
-def _ocr_candidate_images(image: Image.Image) -> list[Image.Image]:
-    """Return a small set of OCR images without making runtime unbounded."""
-    candidates = [image]
-    mean_luminance = ImageStat.Stat(image.convert("L")).mean[0]
+def _fallback_ocr_image(image: Image.Image) -> Image.Image:
+    """Return a single bounded fallback image for very low primary OCR output."""
+    grayscale = image.convert("L")
+    mean_luminance = ImageStat.Stat(grayscale).mean[0]
     if mean_luminance < 128:
-        candidates.append(ImageOps.invert(image.convert("L")))
-    return candidates
+        return ImageOps.invert(grayscale)
+    return grayscale
 
 
 def _combine_ocr_outputs(outputs: list[str]) -> str:
@@ -126,11 +127,11 @@ def extract_text_from_image_bytes(image_bytes: bytes, filename: str = "label.png
     try:
         image = Image.open(BytesIO(image_bytes))
         processed = preprocess_image(image)
-        outputs = [
-            pytesseract.image_to_string(candidate, config=config)
-            for candidate in _ocr_candidate_images(processed)
-            for config in OCR_CONFIGS
-        ]
+        primary_text = pytesseract.image_to_string(processed, config=PRIMARY_OCR_CONFIG)
+        outputs = [primary_text]
+        if len(primary_text.strip()) < 20:
+            fallback = _fallback_ocr_image(processed)
+            outputs.append(pytesseract.image_to_string(fallback, config=FALLBACK_OCR_CONFIG))
         text = _combine_ocr_outputs(outputs)
     except UnidentifiedImageError:
         return OcrResult(text="", status="FAIL", message="Uploaded file could not be read as an image.")

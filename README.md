@@ -8,15 +8,12 @@ The app lets a reviewer upload label artwork, enter expected application data, r
 
 - Single-label PNG/JPG upload
 - OCR extraction through Tesseract / pytesseract
-- Application data entry for:
+- Application data entry for the core take-home workflow:
   - Brand Name
   - Class/Type
-  - Bottler/Producer Name and Address
   - Alcohol Content
   - Net Contents
-  - Country of Origin for imports (optional unless provided)
-- Field-level verification results
-- Mandatory government warning validation with conservative REVIEW handling for warning-like OCR and partial label-panel evidence
+- Government Warning validation from OCR text
 - Overall PASS / FAIL / REVIEW status
 - Extracted OCR text display
 - Friendly upload and verification errors
@@ -228,6 +225,7 @@ Use the included files directly in the UI:
 ## Future Enhancements
 
 - Batch upload after single-label flow is proven
+- Optional common label elements such as Bottler/Producer Name and Address and Country of Origin for imports
 - Bounding-box evidence highlighting
 - Beer/wine/spirits rule profiles
 - Exportable CSV/JSON reports

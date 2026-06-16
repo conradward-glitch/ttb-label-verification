@@ -36,48 +36,36 @@ def test_preprocess_handles_alpha_and_upscales_low_resolution_labels():
     assert processed.size[1] >= 240
 
 
-def test_extract_text_runs_multiple_tesseract_psm_passes_and_combines_unique_output(monkeypatch):
+def test_extract_text_uses_one_primary_tesseract_pass_when_text_is_sufficient(monkeypatch):
     calls = []
 
     def fake_image_to_string(image, config):
         calls.append((image.size, config))
-        if "--psm 6" in config:
-            return "OLD TOM\nDISTILLERY\n"
-        if "--psm 11" in config:
-            return "KENTUCKY STRAIGHT BOURBON WHISKEY\n750 mL\n"
-        if "--psm 4" in config:
-            return "90 PROOF\nOLD TOM\n"
-        return ""
+        return "OLD TOM DISTILLERY\nKENTUCKY STRAIGHT BOURBON WHISKEY\n45% Alc./Vol. (90 Proof)\n750 mL\n"
 
     monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_image_to_string)
     image = Image.new("RGBA", (120, 90), (15, 20, 30, 255))
 
     result = extract_text_from_image_bytes(png_bytes(image), "label.png")
 
-    configs = [config for _, config in calls]
-    assert any("--psm 6" in config for config in configs)
-    assert any("--psm 11" in config for config in configs)
-    assert any("--psm 4" in config for config in configs)
-    assert all(size[0] >= 360 and size[1] >= 270 for size, _ in calls)
+    assert len(calls) == 1
+    assert calls[0][1] == ocr.PRIMARY_OCR_CONFIG
+    assert calls[0][0][0] >= 360 and calls[0][0][1] >= 270
     assert result.status == "PASS"
-    assert result.text.count("OLD TOM") == 1
-    assert "DISTILLERY" in result.text
+    assert "OLD TOM DISTILLERY" in result.text
     assert "KENTUCKY STRAIGHT BOURBON WHISKEY" in result.text
     assert "750 mL" in result.text
-    assert "90 PROOF" in result.text
 
 
-def test_dark_low_resolution_labels_are_ocr_checked_with_inverted_variant(monkeypatch):
+def test_extract_text_runs_one_fallback_only_when_primary_returns_almost_no_text(monkeypatch):
     calls = []
 
     def fake_image_to_string(image, config):
         mean_luminance = ImageStat.Stat(image.convert("L")).mean[0]
         calls.append((mean_luminance, config))
-        if mean_luminance > 180 and "--psm 11" in config:
-            return "OLD TOM DISTILLERY\n90 PROOF\n"
-        if mean_luminance <= 180 and "--psm 6" in config:
-            return "KENTUCKY STRAIGHT\nBOURBON WHISKEY\n750 mL\n"
-        return ""
+        if len(calls) == 1:
+            return "OLD"
+        return "OLD TOM DISTILLERY\nKENTUCKY STRAIGHT BOURBON WHISKEY\n45% Alc./Vol. (90 Proof)\n750 mL\n"
 
     monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_image_to_string)
     image = Image.new("RGBA", (140, 100), (8, 12, 18, 255))
@@ -85,12 +73,8 @@ def test_dark_low_resolution_labels_are_ocr_checked_with_inverted_variant(monkey
 
     result = extract_text_from_image_bytes(png_bytes(image), "old-tom.png")
 
-    assert len(calls) == len(ocr.OCR_CONFIGS) * 2
-    assert any(mean > 180 for mean, _ in calls)
-    assert any(mean <= 180 for mean, _ in calls)
+    assert len(calls) == 2
+    assert calls[1][1] == ocr.FALLBACK_OCR_CONFIG
     assert result.status == "PASS"
     assert "OLD TOM DISTILLERY" in result.text
-    assert "KENTUCKY STRAIGHT" in result.text
-    assert "BOURBON WHISKEY" in result.text
-    assert "750 mL" in result.text
-    assert "90 PROOF" in result.text
+    assert "KENTUCKY STRAIGHT BOURBON WHISKEY" in result.text
