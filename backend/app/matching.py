@@ -240,10 +240,14 @@ def verify_application(ocr_text: str, application_data: dict[str, Any]) -> dict[
     fields = [
         _verify_text_field("Brand Name", ocr_text, application_data.get("brand_name", ""), fuzzy=True),
         _verify_text_field("Class/Type", ocr_text, application_data.get("class_type", ""), fuzzy=True),
+        _verify_text_field("Bottler/Producer Name and Address", ocr_text, application_data.get("bottler_producer", ""), fuzzy=True),
         _verify_abv(ocr_text, application_data.get("alcohol_content", "")),
         _verify_net_contents(ocr_text, application_data.get("net_contents", "")),
         _verify_warning(ocr_text),
     ]
+    country_of_origin = application_data.get("country_of_origin", "")
+    if country_of_origin:
+        fields.append(_verify_text_field("Country of Origin", ocr_text, country_of_origin, fuzzy=True))
     statuses = [field["status"] for field in fields]
     if "FAIL" in statuses:
         overall = "FAIL"

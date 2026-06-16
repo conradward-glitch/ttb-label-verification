@@ -7,8 +7,10 @@ import './styles.css';
 const defaultApplication: ApplicationData = {
   brand_name: 'OLD TOM DISTILLERY',
   class_type: 'Kentucky Straight Bourbon Whiskey',
+  bottler_producer: 'Bottled by Commonwealth Bottling Co., Louisville, KY',
   alcohol_content: '45% Alc./Vol. (90 Proof)',
-  net_contents: '750 mL'
+  net_contents: '750 mL',
+  country_of_origin: ''
 };
 
 function statusClass(status: Status): string {
@@ -46,7 +48,7 @@ function App() {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = useMemo(() => Boolean(image && applicationData.brand_name && applicationData.class_type && applicationData.alcohol_content && applicationData.net_contents), [image, applicationData]);
+  const canSubmit = useMemo(() => Boolean(image && applicationData.brand_name && applicationData.class_type && applicationData.bottler_producer && applicationData.alcohol_content && applicationData.net_contents), [image, applicationData]);
 
   function updateField(field: keyof ApplicationData, value: string) {
     setApplicationData((current) => ({ ...current, [field]: value }));
@@ -126,8 +128,10 @@ function App() {
           <div className="form-grid">
             <label>Brand Name<input value={applicationData.brand_name} onChange={(e) => updateField('brand_name', e.target.value)} /></label>
             <label>Class/Type<input value={applicationData.class_type} onChange={(e) => updateField('class_type', e.target.value)} /></label>
+            <label>Bottler/Producer Name and Address<input value={applicationData.bottler_producer} onChange={(e) => updateField('bottler_producer', e.target.value)} /></label>
             <label>Alcohol Content<input value={applicationData.alcohol_content} onChange={(e) => updateField('alcohol_content', e.target.value)} /></label>
             <label>Net Contents<input value={applicationData.net_contents} onChange={(e) => updateField('net_contents', e.target.value)} /></label>
+            <label>Country of Origin for Imports<input value={applicationData.country_of_origin} onChange={(e) => updateField('country_of_origin', e.target.value)} placeholder="Optional unless imported" /></label>
           </div>
           <button className="primary-button" disabled={!canSubmit || loading}>{loading ? 'Verifying…' : 'Verify Label'}</button>
           {error && <div className="error-box">{error}</div>}

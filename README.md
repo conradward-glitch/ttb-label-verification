@@ -11,8 +11,10 @@ The app lets a reviewer upload label artwork, enter expected application data, r
 - Application data entry for:
   - Brand Name
   - Class/Type
+  - Bottler/Producer Name and Address
   - Alcohol Content
   - Net Contents
+  - Country of Origin for imports (optional unless provided)
 - Field-level verification results
 - Mandatory government warning validation with conservative REVIEW handling for warning-like OCR and partial label-panel evidence
 - Overall PASS / FAIL / REVIEW status

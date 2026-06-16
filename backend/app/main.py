@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from .matching import verify_application
 from .ocr import extract_text_from_image_bytes, is_allowed_image_filename
+from .schemas import ApplicationData
 
 app = FastAPI(title="TTB Label Verification Prototype", version="0.1.0")
 
@@ -49,6 +50,10 @@ async def verify_label(
         raise HTTPException(status_code=400, detail="application_data must be valid JSON.") from exc
     if not isinstance(parsed_application, dict):
         raise HTTPException(status_code=400, detail="application_data must be a JSON object.")
+    try:
+        parsed_application = ApplicationData.model_validate(parsed_application).model_dump()
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="application_data does not match the expected schema.") from exc
 
     image_bytes = await label_image.read()
     ocr_result = extract_text_from_image_bytes(image_bytes, label_image.filename or "label.png")
