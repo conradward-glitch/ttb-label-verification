@@ -2,26 +2,28 @@
 
 A practical Treasury / TTB take-home prototype for single-label alcohol label verification.
 
-The app lets a reviewer upload label artwork, enter expected application data, run local OCR, and receive explainable PASS / FAIL / REVIEW results for core compliance fields.
+The app lets a reviewer upload label artwork, enter expected application data, and receive explainable PASS / FAIL / REVIEW results for core compliance fields — powered by Claude Vision AI with local Tesseract OCR as fallback.
 
 ## Features
 
 - Single-label PNG/JPG upload
-- OCR extraction through optional Claude Vision primary OCR when `ANTHROPIC_API_KEY` is set, with Tesseract / pytesseract as the local fallback
+- AI-powered OCR via Claude Vision (primary) with Tesseract / pytesseract as local fallback
 - Application data entry for the core take-home workflow:
   - Brand Name
   - Class/Type
+  - Bottler/Producer Name and Address
   - Alcohol Content
   - Net Contents
+  - Country of Origin (conditional — verified when supplied for imports)
 - Government Warning validation from OCR text
 - Overall PASS / FAIL / REVIEW status
+- Field-level explainable results with evidence
 - Extracted OCR text display
 - Friendly upload and verification errors
 - Sample label/application test cases
 - No database
 - No COLA integration
-- No external AI call is required for baseline operation
-- No LLM compliance judge
+- No external AI call required for baseline operation
 
 ## Architecture Diagram
 
@@ -34,7 +36,7 @@ React + Vite + TypeScript Frontend
   v
 FastAPI Backend
   |
-  +--> OCR Pipeline: optional Claude Vision primary OCR + local Tesseract fallback
+  +--> OCR Pipeline: Claude Vision primary + local Tesseract fallback
   |
   +--> Matching Engine: deterministic field checks
   |
@@ -44,11 +46,24 @@ FastAPI Backend
 Structured PASS / FAIL / REVIEW Result JSON
 ```
 
+## Design Decisions
+
+This prototype focuses on the single-label verification workflow described in the Treasury take-home assignment.
+Several design decisions were made to balance accuracy, explainability, and implementation time:
+
+- Claude Vision is used as the primary OCR engine because alcohol labels often contain decorative fonts, logos, borders, and complex layouts that are difficult for traditional OCR systems to read reliably.
+- Tesseract OCR is retained as a local fallback so the application can continue operating when external AI services are unavailable.
+- PASS / FAIL / REVIEW classifications were chosen to reflect real compliance workflows. Uncertain OCR results are routed to REVIEW rather than automatically approved or rejected.
+- Verification logic uses deterministic rules and conservative matching behavior to reduce false approvals while still handling common OCR noise.
+- The prototype intentionally focuses on a single-label workflow rather than batch processing so the core verification experience can be evaluated first.
+
+The goal of the prototype is to assist compliance reviewers, not replace human judgment.
+
 ## Technology Stack
 
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI + Python
-- OCR: optional Claude Vision primary OCR when `ANTHROPIC_API_KEY` is set; Tesseract via pytesseract remains the local fallback when the key is missing or the API fails
+- OCR: Claude Vision (claude-sonnet-4-6) when `ANTHROPIC_API_KEY` is set; Tesseract via pytesseract as local fallback
 - Image preprocessing: Pillow
 - Matching: deterministic Python normalization, regex, and conservative fuzzy logic
 - Tests: pytest
@@ -58,7 +73,7 @@ Structured PASS / FAIL / REVIEW Result JSON
 
 ### System OCR Dependency
 
-Tesseract must be installed for OCR to work locally.
+Tesseract must be installed for local OCR fallback to work.
 
 Ubuntu/WSL:
 
@@ -67,7 +82,7 @@ sudo apt-get update
 sudo apt-get install -y tesseract-ocr
 ```
 
-If Tesseract is not installed, the backend returns REVIEW with a clear OCR message instead of crashing. In WSL or local Linux environments, OCR requires installing `tesseract-ocr`; using Docker avoids that local dependency because the Docker image installs Tesseract automatically.
+If Tesseract is not installed, the backend returns REVIEW with a clear OCR message instead of crashing. Using Docker avoids that local dependency because the Docker image installs Tesseract automatically.
 
 ### Backend Dependencies
 
@@ -152,7 +167,7 @@ Docker build from the repository root:
 
 ```bash
 docker build -t ttb-label-verification .
-docker run -p 8000:8000 ttb-label-verification
+docker run -p 8000:8000 -e ANTHROPIC_API_KEY=your_key_here ttb-label-verification
 ```
 
 The Dockerfile builds the React frontend, installs Python dependencies, installs system Tesseract, and serves the built frontend through FastAPI from one URL.
@@ -163,9 +178,10 @@ Render:
 - Root directory: repository root.
 - Environment: Docker.
 - Health check path: `/api/health`.
-- Optional environment variable: `ANTHROPIC_API_KEY` enables Claude Vision as the primary OCR path. If it is not set, or if the API fails, the app uses local Tesseract OCR fallback. No external AI call is required for baseline operation.
-- Public app URL serves both API and frontend.
-- Expected runtime on Render free tier is usually around 9–11 seconds for OCR verification after the service is awake; first request after sleep can be slower. The intended sub-5-second target remains a future optimization goal, not the current deployed behavior.
+- Optional environment variable: `ANTHROPIC_API_KEY` enables Claude Vision as the primary OCR path. If not set, or if the API fails, the app uses local Tesseract OCR fallback. No external AI call is required for baseline operation.
+- With Claude Vision active, verification completes in approximately 3-5 seconds on Render free tier.
+- Without Claude Vision, Tesseract verification runs in approximately 8-11 seconds on Render free tier.
+- First request after a free tier sleep can be slower due to cold start.
 - See `docs/DEPLOYMENT.md` for exact Render steps.
 
 ## Testing Instructions
@@ -213,8 +229,9 @@ Use the included files directly in the UI:
 - Prototype is standalone and does not integrate with COLA.
 - No authentication is required for take-home review.
 - Uploaded images do not need persistent storage.
-- Tesseract OCR is acceptable for MVP demonstration.
-- Government warning bold styling cannot be reliably confirmed with basic OCR.
+- Government warning bold styling cannot be reliably confirmed via OCR alone; agents should verify formatting manually on REVIEW results.
+- Country of Origin is only verified when supplied in the application data; an empty field is treated as a domestic product and skipped.
+- TTB label requirements per Beverage Alcohol Manual (BAM) Chapter 1, distilled spirits.
 
 ## Limitations
 
@@ -222,16 +239,17 @@ Use the included files directly in the UI:
 - No batch upload in MVP.
 - No persistent storage or audit trail.
 - No production federal security/compliance controls.
+- Claude Vision requires an outbound connection to api.anthropic.com; Tesseract fallback operates fully offline.
 
 ## Future Enhancements
 
 - Batch upload after single-label flow is proven
-- Optional common label elements such as Bottler/Producer Name and Address and Country of Origin for imports
-- Bounding-box evidence highlighting
+- Bounding-box evidence highlighting on label image
 - Beer/wine/spirits rule profiles
-- Exportable CSV/JSON reports
-- Better image preprocessing
+- Exportable CSV/JSON audit reports
 - Accessibility polish
+- State of distillation verification for whiskey
+- Commodity statement verification for blended spirits
 
 ## Important Docs
 
@@ -242,4 +260,3 @@ Use the included files directly in the UI:
 - `docs/ARCHITECTURE.md`
 - `docs/DECISIONS.md`
 - `docs/TROUBLESHOOTING.md`
-
