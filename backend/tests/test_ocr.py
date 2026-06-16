@@ -25,6 +25,13 @@ def test_empty_image_bytes_returns_review_signal():
     assert result.text == ""
 
 
+def test_ocr_uses_bounded_configs_and_image_sizing():
+    assert ocr.OCR_PRIMARY_CONFIG == "--oem 3 --psm 6"
+    assert ocr.OCR_FALLBACK_CONFIG == "--oem 3 --psm 11"
+    assert ocr.MIN_OCR_DIMENSION == 900
+    assert ocr.MAX_UPSCALE == 3
+
+
 def test_preprocess_handles_alpha_and_upscales_low_resolution_labels():
     image = Image.new("RGBA", (100, 80), (0, 0, 0, 0))
     image.paste((12, 24, 36, 255), (20, 20, 80, 60))
@@ -49,7 +56,7 @@ def test_extract_text_uses_one_primary_tesseract_pass_when_text_is_sufficient(mo
     result = extract_text_from_image_bytes(png_bytes(image), "label.png")
 
     assert len(calls) == 1
-    assert calls[0][1] == ocr.PRIMARY_OCR_CONFIG
+    assert calls[0][1] == ocr.OCR_PRIMARY_CONFIG
     assert calls[0][0][0] >= 360 and calls[0][0][1] >= 270
     assert result.status == "PASS"
     assert "OLD TOM DISTILLERY" in result.text
@@ -74,7 +81,43 @@ def test_extract_text_runs_one_fallback_only_when_primary_returns_almost_no_text
     result = extract_text_from_image_bytes(png_bytes(image), "old-tom.png")
 
     assert len(calls) == 2
-    assert calls[1][1] == ocr.FALLBACK_OCR_CONFIG
+    assert calls[1][1] == ocr.OCR_FALLBACK_CONFIG
     assert result.status == "PASS"
     assert "OLD TOM DISTILLERY" in result.text
     assert "KENTUCKY STRAIGHT BOURBON WHISKEY" in result.text
+
+
+def test_primary_ocr_under_40_cleaned_characters_triggers_one_fallback(monkeypatch):
+    calls = []
+
+    def fake_image_to_string(image, config):
+        calls.append(config)
+        if len(calls) == 1:
+            return "1234567890\n1234567890\n12345678901234567"
+        return "OLD TOM DISTILLERY\nKENTUCKY STRAIGHT BOURBON WHISKEY\n45% Alc./Vol. (90 Proof)\n750 mL\n"
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_image_to_string)
+    image = Image.new("RGB", (160, 120), (240, 240, 240))
+
+    result = extract_text_from_image_bytes(png_bytes(image), "label.png")
+
+    assert calls == [ocr.OCR_PRIMARY_CONFIG, ocr.OCR_FALLBACK_CONFIG]
+    assert result.status == "PASS"
+    assert "OLD TOM DISTILLERY" in result.text
+
+
+def test_extract_text_logs_preprocessing_ocr_and_total_timing(monkeypatch, caplog):
+    def fake_image_to_string(image, config):
+        return "OLD TOM DISTILLERY\nKENTUCKY STRAIGHT BOURBON WHISKEY\n45% Alc./Vol. (90 Proof)\n750 mL\n"
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_string", fake_image_to_string)
+    image = Image.new("RGB", (160, 120), (240, 240, 240))
+
+    with caplog.at_level("INFO", logger="app.ocr"):
+        result = extract_text_from_image_bytes(png_bytes(image), "label.png")
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert result.status == "PASS"
+    assert "OCR preprocessing completed" in messages
+    assert "OCR pass completed" in messages
+    assert "OCR extraction completed" in messages

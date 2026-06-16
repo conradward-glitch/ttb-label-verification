@@ -1,5 +1,7 @@
+import logging
 from io import BytesIO
 from pathlib import Path
+from time import perf_counter
 
 from PIL import Image, ImageChops, ImageEnhance, ImageFilter, ImageOps, ImageStat, UnidentifiedImageError
 import pytesseract
@@ -7,10 +9,12 @@ import pytesseract
 from .schemas import OcrResult
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
-PRIMARY_OCR_CONFIG = "--oem 3 --psm 6"
-FALLBACK_OCR_CONFIG = "--oem 3 --psm 11"
-MIN_OCR_DIMENSION = 1200
-MAX_UPSCALE = 4
+OCR_PRIMARY_CONFIG = "--oem 3 --psm 6"
+OCR_FALLBACK_CONFIG = "--oem 3 --psm 11"
+MIN_OCR_DIMENSION = 900
+MAX_UPSCALE = 3
+WEAK_OCR_TEXT_LENGTH = 40
+logger = logging.getLogger(__name__)
 
 
 def is_allowed_image_filename(filename: str) -> bool:
@@ -120,19 +124,29 @@ def _combine_ocr_outputs(outputs: list[str]) -> str:
 
 
 def extract_text_from_image_bytes(image_bytes: bytes, filename: str = "label.png") -> OcrResult:
+    total_started_at = perf_counter()
     if not image_bytes:
         return OcrResult(text="", status="REVIEW", message="No image bytes were provided.")
     if not is_allowed_image_filename(filename):
         return OcrResult(text="", status="FAIL", message="Only PNG or JPG label images are supported.")
     try:
         image = Image.open(BytesIO(image_bytes))
+
+        preprocess_started_at = perf_counter()
         processed = preprocess_image(image)
-        primary_text = pytesseract.image_to_string(processed, config=PRIMARY_OCR_CONFIG)
-        outputs = [primary_text]
-        if len(primary_text.strip()) < 20:
+        logger.info("OCR preprocessing completed in %.3fs", perf_counter() - preprocess_started_at)
+
+        ocr_started_at = perf_counter()
+        primary_text = pytesseract.image_to_string(processed, config=OCR_PRIMARY_CONFIG)
+        logger.info("OCR pass completed in %.3fs using primary config", perf_counter() - ocr_started_at)
+
+        text = _combine_ocr_outputs([primary_text])
+        if len(text.strip()) < WEAK_OCR_TEXT_LENGTH:
             fallback = _fallback_ocr_image(processed)
-            outputs.append(pytesseract.image_to_string(fallback, config=FALLBACK_OCR_CONFIG))
-        text = _combine_ocr_outputs(outputs)
+            fallback_started_at = perf_counter()
+            fallback_text = pytesseract.image_to_string(fallback, config=OCR_FALLBACK_CONFIG)
+            logger.info("OCR pass completed in %.3fs using fallback config", perf_counter() - fallback_started_at)
+            text = _combine_ocr_outputs([primary_text, fallback_text])
     except UnidentifiedImageError:
         return OcrResult(text="", status="FAIL", message="Uploaded file could not be read as an image.")
     except pytesseract.TesseractNotFoundError:
@@ -141,6 +155,7 @@ def extract_text_from_image_bytes(image_bytes: bytes, filename: str = "label.png
         return OcrResult(text="", status="REVIEW", message=f"OCR failed and needs manual review: {exc}")
 
     cleaned = text.strip()
+    logger.info("OCR extraction completed in %.3fs", perf_counter() - total_started_at)
     if len(cleaned) < 20:
         return OcrResult(text=cleaned, status="REVIEW", message="OCR extracted very little text; manual review recommended.")
     return OcrResult(text=cleaned, status="PASS", message="OCR completed successfully.")
